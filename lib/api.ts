@@ -81,6 +81,8 @@ export interface OverviewData {
   thisMonthCollections: number;
   thisMonthDeductions: number;
   failedDebitsThisMonth: number;
+  totalPlatformRevenue: number;
+  thisMonthPlatformRevenue: number;
   registrationTrend: { date: string; count: number }[];
   transactionTrend:  { date: string; count: number; amount: number }[];
   creditByMinistry:  { ministry: string; owed: number; limit: number; users: number; utilizationPct: number }[];
