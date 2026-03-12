@@ -44,6 +44,8 @@ export const api = {
   users: (params: UsersParams = {})      => get<UsersData>(`/admin/users?${qs(params)}`),
   userStats: ()                          => get<UserStats>('/admin/users/stats'),
   userDetail: (id: string)               => get<UserDetail>(`/admin/users/${id}`),
+  registerCivilServant: (dto: RegisterCivilServantDto) =>
+    post<{ id: string; name: string; phone: string; employeeId: string; creditLimit: number }>('/admin/users', dto),
   credit: ()                             => get<CreditData>('/admin/credit'),
   directDebits: ()                       => get<DirectDebitData>('/admin/direct-debits'),
   stores: ()                             => get<StoresData>('/admin/stores'),
@@ -146,13 +148,14 @@ export interface CreditData {
 
 export interface DirectDebitData {
   summary: {
-    activeSchedules: number;
+    activeSetups: number;
     totalAttempts: number;
     successRate: number;
     totalCollectedAllTime: number;
     thisMonthCollected: number;
     thisMonthCount: number;
     failedCount: number;
+    thisMonthFailed: number;
     successCount: number;
   };
   byChannel: { channel: string; total: number; success: number; failed: number; amount: number; successRate: number }[];
@@ -235,8 +238,7 @@ export interface UserDetail {
   } | null;
   directDebitSchedule: {
     id: string; bankName: string | null; bankBranchCode: string | null;
-    paymentChannel: string; deductionDay: number; deductionType: string;
-    fixedAmount: number | null; lastDeductionDate: string | null;
+    paymentChannel: string; lastDeductionDate: string | null;
     lastDeductionAmount: number | null; lastDeductionStatus: string | null;
     failureCount: number; isActive: boolean; hasBank: boolean; hasWallet: boolean;
     recentAttempts: {
@@ -257,4 +259,18 @@ export interface StartSimDto {
   batchSize?: number;
   totalUsers?: number;
   intervalMs?: number;
+}
+
+export interface RegisterCivilServantDto {
+  name: string;
+  nationalId: string;
+  phone: string;
+  email?: string;
+  employeeId?: string;
+  ministry: string;
+  department: string;
+  employerCode: string;
+  monthlySalary: number;
+  creditLimit: number;
+  pin: string;
 }

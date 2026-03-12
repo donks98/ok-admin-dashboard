@@ -5,9 +5,9 @@ import {
   Search, RefreshCw, Download, X, ChevronRight,
   User, CreditCard, ShieldCheck, Banknote, ArrowDownUp,
   CheckCircle2, XCircle, Clock, Building2, Phone, Mail,
-  Hash, Calendar, DollarSign, AlertTriangle,
+  Hash, Calendar, DollarSign, AlertTriangle, UserPlus,
 } from 'lucide-react';
-import { api, type UsersData, type UserRow, type UserDetail } from '@/lib/api';
+import { api, type UsersData, type UserRow, type UserDetail, type RegisterCivilServantDto } from '@/lib/api';
 import { fmtUSD, fmtPct, fmtDate, fmtDateTime, utilizationColor, statusColor } from '@/lib/format';
 import PageHeader from '@/components/PageHeader';
 import StatCard from '@/components/StatCard';
@@ -41,6 +41,7 @@ export default function UsersPage() {
   const [perPage, setPerPage]       = useState(25);
   const [loading, setLoading]       = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [showRegister, setShowRegister] = useState(false);
   const [stats, setStats]           = useState<{
     total: number; verified: number; pending: number;
     byMinistry: { ministry: string; count: number }[];
@@ -83,11 +84,19 @@ export default function UsersPage() {
         title="User Management"
         subtitle={`${stats ? stats.total.toLocaleString() : '—'} registered civil servants`}
         action={
-          <button onClick={downloadCSV}
-            className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors shadow-sm">
-            <Download size={14} />
-            Export CSV
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={downloadCSV}
+              className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors shadow-sm">
+              <Download size={14} />
+              Export CSV
+            </button>
+            <button onClick={() => setShowRegister(true)}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-white transition-colors shadow-sm"
+              style={{ background: 'linear-gradient(135deg, #CC0000, #990000)' }}>
+              <UserPlus size={14} />
+              Register Civil Servant
+            </button>
+          </div>
         }
       />
 
@@ -210,6 +219,9 @@ export default function UsersPage() {
     {/* Modal rendered outside fade-in to avoid transform containing-block issue */}
     {selectedId && (
       <UserDetailModal userId={selectedId} onClose={() => setSelectedId(null)} />
+    )}
+    {showRegister && (
+      <RegisterModal onClose={() => setShowRegister(false)} onSuccess={() => { setShowRegister(false); doFetch(); }} />
     )}
     </>
   );
@@ -545,16 +557,11 @@ function UserDetailModal({ userId, onClose }: { userId: string; onClose: () => v
                 {tab === 'payment' && (
                   <div className="fade-in space-y-4">
                     {!user.directDebitSchedule ? (
-                      <Empty message="No direct debit schedule set up" />
+                      <Empty message="No direct debit set up" />
                     ) : (
                       <>
                         <InfoGrid>
                           <InfoCard icon={Banknote} label="Payment Channel" value={user.directDebitSchedule.paymentChannel} />
-                          <InfoCard icon={Calendar} label="Deduction Day" value={`Day ${user.directDebitSchedule.deductionDay} of month`} />
-                          <InfoCard icon={Hash} label="Deduction Type" value={user.directDebitSchedule.deductionType.replace('_',' ')} />
-                          {user.directDebitSchedule.fixedAmount && (
-                            <InfoCard icon={DollarSign} label="Fixed Amount" value={fmtUSD(user.directDebitSchedule.fixedAmount)} highlight />
-                          )}
                           {user.directDebitSchedule.bankName && (
                             <InfoCard icon={Building2} label="Bank Name" value={user.directDebitSchedule.bankName} />
                           )}
@@ -696,5 +703,295 @@ function VerifBadge({ status }: { status: string }) {
   };
   return (
     <span className={`badge ml-auto text-[10px] ${map[status] ?? 'bg-gray-100 text-gray-500'}`}>{status}</span>
+  );
+}
+
+// ─── Register Civil Servant Modal ───────────────────────────────────────────
+
+const SALARY_RANGES = [
+  { label: 'USD 200–300',  value: 250,  creditLimit: 60  },
+  { label: 'USD 301–450',  value: 375,  creditLimit: 90  },
+  { label: 'USD 451–600',  value: 525,  creditLimit: 120 },
+  { label: 'USD 601–900',  value: 750,  creditLimit: 150 },
+  { label: 'USD 901+',     value: 1000, creditLimit: 200 },
+];
+
+const DEPARTMENTS = [
+  'Teacher', 'Nurse', 'Police Officer', 'Administrative Staff', 'Social Worker',
+  'Engineer', 'Accountant', 'Driver', 'Security Officer', 'Other',
+];
+
+interface RegisterModalProps {
+  onClose: () => void;
+  onSuccess: () => void;
+}
+
+function RegisterModal({ onClose, onSuccess }: RegisterModalProps) {
+  const [step, setStep] = useState(1);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Step 1 — Personal
+  const [name, setName]           = useState('');
+  const [nationalId, setNationalId] = useState('');
+  const [phone, setPhone]         = useState('+263');
+  const [email, setEmail]         = useState('');
+
+  // Step 2 — Employment
+  const [department, setDepartment]   = useState('');
+  const [ministry, setMinistry]       = useState('');
+  const [employerCode, setEmployerCode] = useState('');
+  const [salaryRange, setSalaryRange] = useState<typeof SALARY_RANGES[0] | null>(null);
+  const [employeeId, setEmployeeId]   = useState('');
+
+  // Step 3 — PIN
+  const [pin, setPin]         = useState('');
+  const [confirmPin, setConfirmPin] = useState('');
+
+  function validateStep1() {
+    if (!name.trim())       return 'Full name is required';
+    if (!nationalId.trim()) return 'National ID is required';
+    if (!/^\+2637[0-9]{8}$/.test(phone)) return 'Phone must be +2637XXXXXXXX (Zimbabwe mobile)';
+    return null;
+  }
+
+  function validateStep2() {
+    if (!department)        return 'Department is required';
+    if (!ministry)          return 'Ministry is required';
+    if (!employerCode.trim()) return 'Employer code is required';
+    if (!salaryRange)       return 'Salary range is required';
+    return null;
+  }
+
+  function validateStep3() {
+    if (!/^\d{6}$/.test(pin))  return 'PIN must be exactly 6 digits';
+    if (pin !== confirmPin)    return 'PINs do not match';
+    return null;
+  }
+
+  function next() {
+    setError(null);
+    const err = step === 1 ? validateStep1() : step === 2 ? validateStep2() : null;
+    if (err) { setError(err); return; }
+    setStep((s) => s + 1);
+  }
+
+  async function submit() {
+    setError(null);
+    const err = validateStep3();
+    if (err) { setError(err); return; }
+
+    const dto: RegisterCivilServantDto = {
+      name:          name.trim(),
+      nationalId:    nationalId.trim(),
+      phone:         phone.trim(),
+      email:         email.trim() || undefined,
+      employeeId:    employeeId.trim() || undefined,
+      ministry,
+      department,
+      employerCode:  employerCode.trim(),
+      monthlySalary: salaryRange!.value,
+      creditLimit:   salaryRange!.creditLimit,
+      pin,
+    };
+
+    setSubmitting(true);
+    try {
+      await api.registerCivilServant(dto);
+      onSuccess();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Registration failed');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  const stepLabels = ['Personal Details', 'Employment Info', 'Set PIN'];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg flex flex-col max-h-[90vh]">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-gray-100 shrink-0">
+          <div>
+            <p className="text-lg font-bold text-gray-900">Register Civil Servant</p>
+            <p className="text-xs text-gray-400 mt-0.5">Step {step} of 3 — {stepLabels[step - 1]}</p>
+          </div>
+          <button onClick={onClose} className="p-2 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600">
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Step indicator */}
+        <div className="flex gap-1 px-6 pt-4 shrink-0">
+          {[1, 2, 3].map((s) => (
+            <div key={s} className={`h-1 flex-1 rounded-full transition-colors ${s <= step ? 'bg-red-600' : 'bg-gray-200'}`} />
+          ))}
+        </div>
+
+        {/* Body */}
+        <div className="overflow-y-auto flex-1 px-6 py-5 space-y-4">
+          {error && (
+            <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-xl p-3 text-sm text-red-700">
+              <AlertTriangle size={15} className="mt-0.5 shrink-0" />
+              {error}
+            </div>
+          )}
+
+          {step === 1 && (
+            <>
+              <Field label="Full Name *">
+                <input className="input" placeholder="e.g. John Moyo" value={name} onChange={(e) => setName(e.target.value)} />
+              </Field>
+              <Field label="National ID *">
+                <input className="input" placeholder="e.g. 63-123456A78" value={nationalId} onChange={(e) => setNationalId(e.target.value)} />
+              </Field>
+              <Field label="Phone Number *" hint="+2637XXXXXXXX">
+                <input className="input" placeholder="+2637XXXXXXXX" value={phone} onChange={(e) => setPhone(e.target.value)} />
+              </Field>
+              <Field label="Email (optional)">
+                <input className="input" type="email" placeholder="john@example.com" value={email} onChange={(e) => setEmail(e.target.value)} />
+              </Field>
+            </>
+          )}
+
+          {step === 2 && (
+            <>
+              <Field label="Department *">
+                <select className="input" value={department} onChange={(e) => setDepartment(e.target.value)}>
+                  <option value="">Select department…</option>
+                  {DEPARTMENTS.map((d) => <option key={d} value={d}>{d}</option>)}
+                </select>
+              </Field>
+              <Field label="Ministry *">
+                <select className="input" value={ministry} onChange={(e) => setMinistry(e.target.value)}>
+                  <option value="">Select ministry…</option>
+                  {MINISTRIES.map((m) => <option key={m} value={m}>{m}</option>)}
+                </select>
+              </Field>
+              <Field label="Employer Code *">
+                <input className="input" placeholder="e.g. MOE-HRE-001" value={employerCode} onChange={(e) => setEmployerCode(e.target.value)} />
+              </Field>
+              <Field label="Employee ID (optional)">
+                <input className="input" placeholder="e.g. EMP-0042" value={employeeId} onChange={(e) => setEmployeeId(e.target.value)} />
+              </Field>
+              <Field label="Monthly Salary Range *">
+                <div className="grid grid-cols-1 gap-2">
+                  {SALARY_RANGES.map((r) => (
+                    <button
+                      key={r.value}
+                      type="button"
+                      onClick={() => setSalaryRange(r)}
+                      className={`flex items-center justify-between rounded-xl border px-4 py-3 text-sm transition-all ${
+                        salaryRange?.value === r.value
+                          ? 'border-red-500 bg-red-50 text-red-700 font-medium'
+                          : 'border-gray-200 hover:border-gray-300 text-gray-700'
+                      }`}
+                    >
+                      <span>{r.label}</span>
+                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                        salaryRange?.value === r.value ? 'bg-red-600 text-white' : 'bg-gray-100 text-gray-500'
+                      }`}>
+                        ${r.creditLimit} credit
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </Field>
+              {salaryRange && (
+                <div className="bg-green-50 border border-green-200 rounded-xl p-3 text-sm text-green-700 flex items-center gap-2">
+                  <CheckCircle2 size={15} />
+                  Credit limit will be set to <strong>${salaryRange.creditLimit}</strong>
+                </div>
+              )}
+            </>
+          )}
+
+          {step === 3 && (
+            <>
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-sm text-blue-700">
+                The civil servant will use this PIN to authenticate on the mobile app.
+              </div>
+              <Field label="6-Digit PIN *">
+                <input
+                  className="input tracking-widest text-center text-xl font-bold"
+                  type="password"
+                  inputMode="numeric"
+                  maxLength={6}
+                  placeholder="••••••"
+                  value={pin}
+                  onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                />
+              </Field>
+              <Field label="Confirm PIN *">
+                <input
+                  className="input tracking-widest text-center text-xl font-bold"
+                  type="password"
+                  inputMode="numeric"
+                  maxLength={6}
+                  placeholder="••••••"
+                  value={confirmPin}
+                  onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                />
+              </Field>
+              {/* Summary */}
+              <div className="bg-gray-50 rounded-xl p-4 space-y-2 text-sm">
+                <p className="font-semibold text-gray-700 mb-2">Registration Summary</p>
+                <SummaryRow label="Name"        value={name} />
+                <SummaryRow label="Phone"       value={phone} />
+                <SummaryRow label="Ministry"    value={ministry} />
+                <SummaryRow label="Department"  value={department} />
+                <SummaryRow label="Salary"      value={salaryRange ? salaryRange.label : ''} />
+                <SummaryRow label="Credit Limit" value={salaryRange ? `$${salaryRange.creditLimit}` : ''} />
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 shrink-0">
+          {step > 1
+            ? <button onClick={() => { setError(null); setStep((s) => s - 1); }} className="text-sm text-gray-500 hover:text-gray-700 font-medium">← Back</button>
+            : <button onClick={onClose} className="text-sm text-gray-500 hover:text-gray-700 font-medium">Cancel</button>
+          }
+          {step < 3
+            ? (
+              <button onClick={next} className="btn-primary px-6 py-2 text-sm rounded-xl bg-red-600 text-white font-semibold hover:bg-red-700 transition-colors">
+                Next →
+              </button>
+            ) : (
+              <button
+                onClick={submit}
+                disabled={submitting}
+                className="btn-primary px-6 py-2 text-sm rounded-xl bg-red-600 text-white font-semibold hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {submitting && <RefreshCw size={14} className="animate-spin" />}
+                {submitting ? 'Registering…' : 'Register Civil Servant'}
+              </button>
+            )
+          }
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <label className="block text-xs font-semibold text-gray-600 mb-1.5">
+        {label} {hint && <span className="font-normal text-gray-400">— {hint}</span>}
+      </label>
+      {children}
+    </div>
+  );
+}
+
+function SummaryRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex justify-between">
+      <span className="text-gray-500">{label}</span>
+      <span className="font-medium text-gray-800">{value}</span>
+    </div>
   );
 }

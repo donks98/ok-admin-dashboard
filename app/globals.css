@@ -140,6 +140,24 @@ body {
   border-radius: 6px;
 }
 
+/* ── Form inputs ────────────────────────────────────────────── */
+.input {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 0.875rem;
+  color: var(--text-primary);
+  background: var(--surface);
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.input:focus {
+  border-color: #CC0000;
+  box-shadow: 0 0 0 3px rgba(204,0,0,0.08);
+}
+.input::placeholder { color: var(--text-tertiary); }
+
 /* ── Number formatting ─────────────────────────────────────── */
 .tabular { font-variant-numeric: tabular-nums; }
 .num { animation: countUp 0.4s ease both; }

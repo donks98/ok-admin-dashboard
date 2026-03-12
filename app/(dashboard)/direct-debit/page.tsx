@@ -2,13 +2,12 @@
 
 import { useEffect, useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { ArrowDownUp, CheckCircle2, XCircle, Clock, DollarSign, TrendingUp, RefreshCw } from 'lucide-react';
+import { ArrowDownUp, CheckCircle2, DollarSign, TrendingUp, RefreshCw } from 'lucide-react';
 import { api, DirectDebitData } from '@/lib/api';
-import { fmtUSD, fmtNum, fmtPct, fmtDateTime, statusColor } from '@/lib/format';
+import { fmtUSD, fmtNum, fmtPct } from '@/lib/format';
 import PageHeader from '@/components/PageHeader';
 import StatCard from '@/components/StatCard';
 import EmptyState from '@/components/EmptyState';
-import Pagination from '@/components/Pagination';
 
 const CHANNEL_LABEL: Record<string, string> = {
   BANK_TRANSFER: 'Bank Transfer',
@@ -18,11 +17,9 @@ const CHANNEL_LABEL: Record<string, string> = {
 };
 
 export default function DirectDebitPage() {
-  const [data, setData]     = useState<DirectDebitData | null>(null);
+  const [data, setData]       = useState<DirectDebitData | null>(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError]   = useState<string | null>(null);
-  const [page, setPage]     = useState(1);
-  const [perPage, setPerPage] = useState(25);
+  const [error, setError]     = useState<string | null>(null);
 
   function load() {
     setLoading(true);
@@ -49,30 +46,20 @@ export default function DirectDebitPage() {
       />
 
       {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-4 gap-4 mb-6">
-        <StatCard title="Active Schedules"     value={fmtNum(s?.activeSchedules ?? 0)}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        <StatCard title="Active Direct Debits"  value={fmtNum(s?.activeSetups ?? 0)}
           icon={ArrowDownUp}  iconBg="bg-purple-50" iconColor="text-purple-600" accent="#8B5CF6" />
-        <StatCard title="Success Rate"         value={fmtPct(s?.successRate ?? 0)}
+        <StatCard title="Success Rate"          value={fmtPct(s?.successRate ?? 0)}
           icon={CheckCircle2} iconBg="bg-green-50"  iconColor="text-green-600"  accent="#00843D" />
-        <StatCard title="Collected All-Time"   value={fmtUSD(s?.totalCollectedAllTime ?? 0, true)}
+        <StatCard title="Collected All-Time"    value={fmtUSD(s?.totalCollectedAllTime ?? 0, true)}
           icon={DollarSign}   iconBg="bg-teal-50"   iconColor="text-teal-600"   accent="#14B8A6" />
-        <StatCard title="Collected This Month" value={fmtUSD(s?.thisMonthCollected ?? 0, true)}
+        <StatCard title="Collected This Month"  value={fmtUSD(s?.thisMonthCollected ?? 0, true)}
           icon={TrendingUp}   iconBg="bg-red-50"    iconColor="text-red-600"    accent="#CC0000"
           sub={`${fmtNum(s?.thisMonthCount ?? 0)} deductions`} />
       </div>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-        <StatCard title="Total Attempts"  value={fmtNum(s?.totalAttempts ?? 0)}
-          icon={ArrowDownUp}  iconBg="bg-gray-100" iconColor="text-gray-600" />
-        <StatCard title="Successful"      value={fmtNum(s?.successCount ?? 0)}
-          icon={CheckCircle2} iconBg="bg-green-50" iconColor="text-green-600" />
-        <StatCard title="Failed"          value={fmtNum(s?.failedCount ?? 0)}
-          icon={XCircle}      iconBg="bg-red-50"   iconColor="text-red-600" />
-        <StatCard title="Pending"         value="—"
-          icon={Clock}        iconBg="bg-yellow-50" iconColor="text-yellow-600" />
-      </div>
 
-      {/* Monthly trend chart */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+      {/* Monthly trend + by channel */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="card p-6 lg:col-span-2">
           <p className="text-base font-semibold text-gray-800 mb-4">Monthly Collections (Last 12 Months)</p>
           {!data || data.monthlyTrend.length === 0
@@ -94,7 +81,7 @@ export default function DirectDebitPage() {
           )}
         </div>
 
-        {/* By Channel table */}
+        {/* By Channel */}
         <div className="card p-6">
           <p className="text-base font-semibold text-gray-800 mb-4">By Payment Channel</p>
           {!data || data.byChannel.length === 0
@@ -122,67 +109,6 @@ export default function DirectDebitPage() {
               ))}
             </div>
           )}
-        </div>
-      </div>
-
-      {/* Recent attempts */}
-      <div className="card">
-        <div className="px-6 py-4 border-b border-gray-100">
-          <p className="font-semibold text-gray-800">Deduction Attempts</p>
-          <p className="text-xs text-gray-500 mt-0.5">{data ? data.recentAttempts.length.toLocaleString() : '—'} total attempts across all channels</p>
-        </div>
-        <div className="overflow-x-auto">
-          {!data || data.recentAttempts.length === 0
-            ? <EmptyState message="No deduction attempts recorded yet." />
-            : (() => {
-                const attempts = data.recentAttempts;
-                const pages = Math.ceil(attempts.length / perPage);
-                const slice = attempts.slice((page - 1) * perPage, page * perPage);
-                return (
-                  <>
-                  <table className="data-table">
-                    <thead>
-                      <tr>
-                        <th>Employee</th>
-                        <th>Ministry</th>
-                        <th>Channel</th>
-                        <th>Amount</th>
-                        <th>Status</th>
-                        <th>Reason</th>
-                        <th>When</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {slice.map((a) => (
-                        <tr key={a.id}>
-                          <td>
-                            <p className="font-medium text-sm">{a.user?.name ?? '—'}</p>
-                            <p className="text-xs text-gray-400">{a.user?.employeeId ?? ''}</p>
-                          </td>
-                          <td className="text-sm">{a.user?.ministry?.replace('Ministry of ','') ?? '—'}</td>
-                          <td>
-                            <span className="badge bg-blue-50 text-blue-700">
-                              {CHANNEL_LABEL[a.paymentChannel] ?? a.paymentChannel}
-                            </span>
-                          </td>
-                          <td className="font-semibold text-sm">{fmtUSD(a.amount)}</td>
-                          <td>
-                            <span className={`badge ${statusColor(a.status)}`}>{a.status}</span>
-                          </td>
-                          <td className="text-xs text-gray-500 max-w-xs truncate">{a.failureReason ?? '—'}</td>
-                          <td className="text-xs text-gray-500 whitespace-nowrap">{fmtDateTime(a.attemptedAt)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                  <Pagination
-                    page={page} pages={pages} total={attempts.length} perPage={perPage}
-                    onChange={setPage} onPerPageChange={(n) => { setPerPage(n); setPage(1); }}
-                  />
-                  </>
-                );
-              })()
-          }
         </div>
       </div>
     </div>
