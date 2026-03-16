@@ -30,6 +30,8 @@ async function post<T>(path: string, body?: unknown): Promise<T> {
 export function logout() {
   if (typeof window === 'undefined') return;
   localStorage.removeItem('admin_token');
+  localStorage.removeItem('admin_role');
+  localStorage.removeItem('admin_name');
   document.cookie = 'admin_token=; path=/; max-age=0';
   window.location.href = '/login';
 }

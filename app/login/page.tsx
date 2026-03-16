@@ -34,8 +34,10 @@ function LoginForm() {
         setError(data.message || 'Invalid credentials');
         return;
       }
-      const { accessToken } = await res.json();
+      const { accessToken, role, name } = await res.json();
       localStorage.setItem('admin_token', accessToken);
+      localStorage.setItem('admin_role', role ?? 'VIEWER');
+      localStorage.setItem('admin_name', name ?? username);
       document.cookie = `admin_token=${accessToken}; path=/; max-age=86400; SameSite=Strict`;
       const from = params.get('from') || '/';
       router.push(from);

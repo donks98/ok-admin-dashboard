@@ -2,13 +2,15 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useEffect, useState } from 'react';
 import {
   LayoutDashboard, Users, CreditCard, ArrowDownUp,
   Store, FlaskConical, LogOut,
 } from 'lucide-react';
 import { logout } from '@/lib/api';
+import { getRole, getAdminName, ROLE_META, type AdminRole, ROLE_PAGES } from '@/lib/auth';
 
-const NAV = [
+const ALL_NAV = [
   { href: '/',             label: 'Overview',      icon: LayoutDashboard },
   { href: '/users',        label: 'Users',         icon: Users           },
   { href: '/credit',       label: 'Credit & Debt', icon: CreditCard      },
@@ -19,6 +21,20 @@ const NAV = [
 
 export default function Sidebar() {
   const path = usePathname();
+  const [role, setRole]     = useState<AdminRole>('VIEWER');
+  const [name, setName]     = useState('Admin');
+
+  useEffect(() => {
+    setRole(getRole());
+    setName(getAdminName());
+  }, []);
+
+  const allowedPages = ROLE_PAGES[role] ?? ['/'];
+  const nav = ALL_NAV.filter(({ href }) =>
+    allowedPages.some(p => p === href)
+  );
+
+  const meta = ROLE_META[role];
 
   return (
     <aside
@@ -49,6 +65,22 @@ export default function Sidebar() {
         </div>
       </div>
 
+      {/* Role badge */}
+      <div className="mx-3 mt-3 px-3 py-2 rounded-xl flex items-center gap-2.5"
+        style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
+        <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[11px] font-bold shrink-0"
+          style={{ background: `linear-gradient(135deg, ${meta.color}, ${meta.color}99)` }}>
+          {name.charAt(0).toUpperCase()}
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-white text-[12px] font-semibold truncate leading-tight">{name}</p>
+          <span className="inline-block mt-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide"
+            style={{ background: meta.bg, color: meta.color }}>
+            {meta.label}
+          </span>
+        </div>
+      </div>
+
       {/* Nav */}
       <nav className="flex-1 px-3 py-5 overflow-y-auto">
         <p className="text-[10px] font-bold uppercase tracking-[0.12em] px-3 mb-3"
@@ -56,17 +88,14 @@ export default function Sidebar() {
           Navigation
         </p>
         <div className="space-y-0.5">
-          {NAV.map(({ href, label, icon: Icon }) => {
+          {nav.map(({ href, label, icon: Icon }) => {
             const active = path === href || (href !== '/' && path.startsWith(href));
             return (
               <Link
                 key={href}
                 href={href}
                 className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 group
-                  ${active
-                    ? 'text-white'
-                    : 'hover:text-white/80'
-                  }`}
+                  ${active ? 'text-white' : 'hover:text-white/80'}`}
                 style={{
                   color: active ? '#FFFFFF' : 'rgba(255,255,255,0.42)',
                   backgroundColor: active ? 'rgba(204,0,0,0.18)' : 'transparent',
@@ -75,9 +104,7 @@ export default function Sidebar() {
               >
                 <div
                   className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-all duration-150"
-                  style={{
-                    backgroundColor: active ? 'rgba(204,0,0,0.25)' : 'rgba(255,255,255,0.06)',
-                  }}
+                  style={{ backgroundColor: active ? 'rgba(204,0,0,0.25)' : 'rgba(255,255,255,0.06)' }}
                 >
                   <Icon
                     size={15}
@@ -97,7 +124,6 @@ export default function Sidebar() {
 
       {/* Footer */}
       <div className="px-3 pb-4 pt-3" style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-        {/* System status */}
         <div className="flex items-center gap-2 px-3 py-2 mb-1">
           <div className="relative flex items-center justify-center">
             <div className="w-2 h-2 rounded-full bg-green-400" style={{ boxShadow: '0 0 6px rgba(74,222,128,0.6)' }} />
