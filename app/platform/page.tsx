@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { DollarSign, TrendingUp, AlertTriangle, Activity, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 
-function authHeader() {
+function authHeader(): Record<string, string> {
   const token = typeof window !== 'undefined' ? localStorage.getItem('platform_token') : '';
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
