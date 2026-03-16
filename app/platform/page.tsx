@@ -1,18 +1,12 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import { DollarSign, TrendingUp, AlertTriangle, Activity, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { DollarSign, TrendingUp, AlertTriangle, Activity, ChevronLeft, ChevronRight, RefreshCw, Search, X } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 
 function authHeader(): Record<string, string> {
   const token = typeof window !== 'undefined' ? localStorage.getItem('platform_token') : '';
   return token ? { Authorization: `Bearer ${token}` } : {};
-}
-
-async function apiFetch(path: string) {
-  const res = await fetch(path, { headers: authHeader() });
-  if (!res.ok) throw new Error(`${res.status}`);
-  return res.json();
 }
 
 function StatCard({ title, value, sub, icon: Icon, color }: any) {
@@ -60,34 +54,84 @@ const ACTION_COLORS: Record<string, string> = {
   ADMIN_VIEWED_STORES: '#475569',      ADMIN_EXPORTED_REPORT: '#F59E0B',
 };
 
+const RESOURCES = ['', 'auth', 'admin', 'wallet', 'transaction', 'direct-debit', 'credit', 'verification', 'family'];
+
+function resolveUser(log: any): { label: string; isAdmin: boolean } | null {
+  if (log.user?.name) return { label: `${log.user.name} (${log.user.employeeId})`, isAdmin: false };
+  if (log.metadata?.username) return { label: log.metadata.username, isAdmin: true };
+  return null;
+}
+
 export default function PlatformPage() {
-  const [revenue, setRevenue]   = useState<any>(null);
-  const [stats, setStats]       = useState<any>(null);
-  const [auditLogs, setAudit]   = useState<any>({ data: [], total: 0, pages: 1 });
-  const [errorLogs, setErrors]  = useState<any>({ data: [], total: 0, pages: 1 });
+  const [revenue, setRevenue]     = useState<any>(null);
+  const [stats, setStats]         = useState<any>(null);
+  const [auditLogs, setAudit]     = useState<any>({ data: [], total: 0, pages: 1 });
+  const [errorLogs, setErrors]    = useState<any>({ data: [], total: 0, pages: 1 });
   const [auditPage, setAuditPage] = useState(1);
   const [errorPage, setErrorPage] = useState(1);
-  const [tab, setTab]           = useState<'audit' | 'errors'>('audit');
-  const [loading, setLoading]   = useState(true);
+  const [tab, setTab]             = useState<'audit' | 'errors'>('audit');
+  const [loading, setLoading]     = useState(true);
+  const [auditSearch, setAuditSearch]     = useState('');
+  const [errorSearch, setErrorSearch]     = useState('');
+  const [auditResource, setAuditResource] = useState('');
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const loadStats = useCallback(async () => {
+    const [rev, st] = await Promise.all([
+      fetch('/api/platform/revenue').then(r => r.json()).catch(() => null),
+      fetch('/api/platform/stats').then(r => r.json()).catch(() => null),
+    ]);
+    if (rev) setRevenue(rev);
+    if (st)  setStats(st);
+  }, []);
+
+  const loadAudit = useCallback(async (page: number, action: string, resource: string) => {
+    const qs = new URLSearchParams({ page: String(page), limit: '20' });
+    if (action)   qs.set('action', action);
+    if (resource) qs.set('resource', resource);
+    const data = await fetch(`/api/platform/audit-logs?${qs}`).then(r => r.json()).catch(() => null);
+    if (data) setAudit(data);
+  }, []);
+
+  const loadErrors = useCallback(async (page: number) => {
+    const data = await fetch(`/api/platform/error-logs?page=${page}&limit=20`).then(r => r.json()).catch(() => null);
+    if (data) setErrors(data);
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [rev, st, audit, err] = await Promise.all([
-      fetch('/api/platform/revenue').then(r => r.json()).catch(() => null),
-      fetch('/api/platform/stats').then(r => r.json()).catch(() => null),
-      fetch(`/api/platform/audit-logs?page=${auditPage}&limit=20`).then(r => r.json()).catch(() => null),
-      fetch(`/api/platform/error-logs?page=${errorPage}&limit=20`).then(r => r.json()).catch(() => null),
+    await Promise.all([
+      loadStats(),
+      loadAudit(auditPage, auditSearch, auditResource),
+      loadErrors(errorPage),
     ]);
-    if (rev)   setRevenue(rev);
-    if (st)    setStats(st);
-    if (audit) setAudit(audit);
-    if (err)   setErrors(err);
     setLoading(false);
-  }, [auditPage, errorPage]);
+  }, [auditPage, errorPage, auditSearch, auditResource, loadStats, loadAudit, loadErrors]);
 
   useEffect(() => { load(); }, [load]);
 
-  const fmt = (n: number) => `$${Number(n ?? 0).toFixed(4)}`;
+  // Debounce audit search
+  const handleAuditSearch = (val: string) => {
+    setAuditSearch(val);
+    setAuditPage(1);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => loadAudit(1, val, auditResource), 300);
+  };
+
+  const handleResourceChange = (val: string) => {
+    setAuditResource(val);
+    setAuditPage(1);
+    loadAudit(1, auditSearch, val);
+  };
+
+  // Client-side filter for error logs (path + message)
+  const filteredErrors = errorSearch
+    ? errorLogs.data.filter((l: any) =>
+        l.path?.toLowerCase().includes(errorSearch.toLowerCase()) ||
+        l.message?.toLowerCase().includes(errorSearch.toLowerCase()))
+    : errorLogs.data;
+
+  const fmt    = (n: number) => `$${Number(n ?? 0).toFixed(4)}`;
   const fmtUSD = (n: number) => `$${Number(n ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   return (
@@ -156,52 +200,109 @@ export default function PlatformPage() {
         {/* Audit Logs */}
         {tab === 'audit' && (
           <div className="rounded-xl overflow-hidden" style={{ border: '1px solid rgba(255,255,255,0.07)' }}>
+            {/* Search + filter toolbar */}
+            <div className="flex gap-2 px-4 py-3" style={{ background: '#13131f', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+              <div className="relative flex-1">
+                <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2" style={{ color: 'rgba(255,255,255,0.25)' }} />
+                <input
+                  value={auditSearch}
+                  onChange={e => handleAuditSearch(e.target.value)}
+                  placeholder="Search actions… (e.g. LOGIN, PAYMENT)"
+                  className="w-full pl-7 pr-7 py-1.5 rounded-lg text-[11px] font-mono bg-transparent outline-none"
+                  style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.7)' }}
+                />
+                {auditSearch && (
+                  <button onClick={() => handleAuditSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2" style={{ color: 'rgba(255,255,255,0.25)' }}>
+                    <X size={11} />
+                  </button>
+                )}
+              </div>
+              <select
+                value={auditResource}
+                onChange={e => handleResourceChange(e.target.value)}
+                className="px-2.5 py-1.5 rounded-lg text-[11px] font-mono outline-none"
+                style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.5)' }}>
+                {RESOURCES.map(r => (
+                  <option key={r} value={r} style={{ background: '#13131f' }}>{r || 'All resources'}</option>
+                ))}
+              </select>
+            </div>
+
             <table className="w-full text-[12px]">
               <thead>
-                <tr style={{ background: '#13131f', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                <tr style={{ background: '#0f0f1a', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
                   {['Time', 'Action', 'Resource', 'User', 'IP'].map(h => (
                     <th key={h} className="px-4 py-2.5 text-left font-bold uppercase tracking-wider" style={{ color: 'rgba(255,255,255,0.25)', fontSize: 10 }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {auditLogs.data.map((log: any, i: number) => (
-                  <tr key={log.id} style={{ background: i % 2 === 0 ? '#0D0D1A' : '#10101C', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
-                    <td className="px-4 py-2.5 font-mono" style={{ color: 'rgba(255,255,255,0.3)' }}>
-                      {new Date(log.createdAt).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                    </td>
-                    <td className="px-4 py-2.5">
-                      <Badge text={log.action} color={ACTION_COLORS[log.action] ?? '#6366F1'} />
-                    </td>
-                    <td className="px-4 py-2.5 font-mono" style={{ color: 'rgba(255,255,255,0.4)' }}>{log.resource}</td>
-                    <td className="px-4 py-2.5" style={{ color: 'rgba(255,255,255,0.5)' }}>
-                      {log.user ? `${log.user.name} (${log.user.employeeId})` : <span style={{ color: 'rgba(255,255,255,0.2)' }}>—</span>}
-                    </td>
-                    <td className="px-4 py-2.5 font-mono" style={{ color: 'rgba(255,255,255,0.25)' }}>{log.ipAddress ?? '—'}</td>
-                  </tr>
-                ))}
+                {auditLogs.data.map((log: any, i: number) => {
+                  const who = resolveUser(log);
+                  return (
+                    <tr key={log.id} style={{ background: i % 2 === 0 ? '#0D0D1A' : '#10101C', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
+                      <td className="px-4 py-2.5 font-mono" style={{ color: 'rgba(255,255,255,0.3)' }}>
+                        {new Date(log.createdAt).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <Badge text={log.action} color={ACTION_COLORS[log.action] ?? '#6366F1'} />
+                      </td>
+                      <td className="px-4 py-2.5 font-mono" style={{ color: 'rgba(255,255,255,0.4)' }}>{log.resource}</td>
+                      <td className="px-4 py-2.5">
+                        {who ? (
+                          <span style={{ color: who.isAdmin ? '#818CF8' : 'rgba(255,255,255,0.6)' }}>
+                            {who.isAdmin && <span className="text-[9px] mr-1 font-bold uppercase" style={{ color: '#6366F180' }}>admin</span>}
+                            {who.label}
+                          </span>
+                        ) : (
+                          <span style={{ color: 'rgba(255,255,255,0.2)' }}>—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-2.5 font-mono" style={{ color: 'rgba(255,255,255,0.25)' }}>{log.ipAddress ?? '—'}</td>
+                    </tr>
+                  );
+                })}
                 {auditLogs.data.length === 0 && (
-                  <tr><td colSpan={5} className="px-4 py-8 text-center" style={{ color: 'rgba(255,255,255,0.2)' }}>No audit events yet</td></tr>
+                  <tr><td colSpan={5} className="px-4 py-8 text-center" style={{ color: 'rgba(255,255,255,0.2)' }}>No audit events found</td></tr>
                 )}
               </tbody>
             </table>
-            <Pagination page={auditPage} pages={auditLogs.pages} onChange={setAuditPage} />
+            <Pagination page={auditPage} pages={auditLogs.pages} onChange={p => { setAuditPage(p); loadAudit(p, auditSearch, auditResource); }} />
           </div>
         )}
 
         {/* Error Logs */}
         {tab === 'errors' && (
           <div className="rounded-xl overflow-hidden" style={{ border: '1px solid rgba(255,255,255,0.07)' }}>
+            {/* Search toolbar */}
+            <div className="px-4 py-3" style={{ background: '#13131f', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+              <div className="relative">
+                <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2" style={{ color: 'rgba(255,255,255,0.25)' }} />
+                <input
+                  value={errorSearch}
+                  onChange={e => setErrorSearch(e.target.value)}
+                  placeholder="Filter by path or message…"
+                  className="w-full pl-7 pr-7 py-1.5 rounded-lg text-[11px] font-mono bg-transparent outline-none"
+                  style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.7)' }}
+                />
+                {errorSearch && (
+                  <button onClick={() => setErrorSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2" style={{ color: 'rgba(255,255,255,0.25)' }}>
+                    <X size={11} />
+                  </button>
+                )}
+              </div>
+            </div>
+
             <table className="w-full text-[12px]">
               <thead>
-                <tr style={{ background: '#13131f', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                <tr style={{ background: '#0f0f1a', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
                   {['Time', 'Status', 'Method', 'Path', 'Message'].map(h => (
                     <th key={h} className="px-4 py-2.5 text-left font-bold uppercase tracking-wider" style={{ color: 'rgba(255,255,255,0.25)', fontSize: 10 }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {errorLogs.data.map((log: any, i: number) => (
+                {filteredErrors.map((log: any, i: number) => (
                   <tr key={log.id} style={{ background: i % 2 === 0 ? '#0D0D1A' : '#10101C', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
                     <td className="px-4 py-2.5 font-mono" style={{ color: 'rgba(255,255,255,0.3)' }}>
                       {new Date(log.createdAt).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit' })}
@@ -214,12 +315,14 @@ export default function PlatformPage() {
                     <td className="px-4 py-2.5 max-w-[300px] truncate" style={{ color: 'rgba(255,255,255,0.5)' }}>{log.message}</td>
                   </tr>
                 ))}
-                {errorLogs.data.length === 0 && (
-                  <tr><td colSpan={5} className="px-4 py-8 text-center" style={{ color: 'rgba(255,255,255,0.2)' }}>No errors recorded — all good!</td></tr>
+                {filteredErrors.length === 0 && (
+                  <tr><td colSpan={5} className="px-4 py-8 text-center" style={{ color: 'rgba(255,255,255,0.2)' }}>
+                    {errorSearch ? 'No errors match your filter' : 'No errors recorded — all good!'}
+                  </td></tr>
                 )}
               </tbody>
             </table>
-            <Pagination page={errorPage} pages={errorLogs.pages} onChange={setErrorPage} />
+            <Pagination page={errorPage} pages={errorLogs.pages} onChange={p => { setErrorPage(p); loadErrors(p); }} />
           </div>
         )}
       </div>
