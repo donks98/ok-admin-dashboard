@@ -275,6 +275,5 @@ export interface RegisterCivilServantDto {
   department: string;
   employerCode: string;
   monthlySalary: number;
-  creditLimit: number;
   pin: string;
 }

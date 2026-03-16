@@ -709,11 +709,11 @@ function VerifBadge({ status }: { status: string }) {
 // ─── Register Civil Servant Modal ───────────────────────────────────────────
 
 const SALARY_RANGES = [
-  { label: 'USD 200–300',  value: 250,  creditLimit: 60  },
-  { label: 'USD 301–450',  value: 375,  creditLimit: 90  },
-  { label: 'USD 451–600',  value: 525,  creditLimit: 120 },
-  { label: 'USD 601–900',  value: 750,  creditLimit: 150 },
-  { label: 'USD 901+',     value: 1000, creditLimit: 200 },
+  { label: 'USD 200–300',  value: 250  },
+  { label: 'USD 301–450',  value: 375  },
+  { label: 'USD 451–600',  value: 525  },
+  { label: 'USD 601–900',  value: 750  },
+  { label: 'USD 901+',     value: 1000 },
 ];
 
 const DEPARTMENTS = [
@@ -791,7 +791,6 @@ function RegisterModal({ onClose, onSuccess }: RegisterModalProps) {
       department,
       employerCode:  employerCode.trim(),
       monthlySalary: salaryRange!.value,
-      creditLimit:   salaryRange!.creditLimit,
       pin,
     };
 
@@ -892,7 +891,7 @@ function RegisterModal({ onClose, onSuccess }: RegisterModalProps) {
                       <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
                         salaryRange?.value === r.value ? 'bg-red-600 text-white' : 'bg-gray-100 text-gray-500'
                       }`}>
-                        ${r.creditLimit} credit
+                        ${Math.floor(r.value * 0.3)} credit
                       </span>
                     </button>
                   ))}
@@ -901,7 +900,7 @@ function RegisterModal({ onClose, onSuccess }: RegisterModalProps) {
               {salaryRange && (
                 <div className="bg-green-50 border border-green-200 rounded-xl p-3 text-sm text-green-700 flex items-center gap-2">
                   <CheckCircle2 size={15} />
-                  Credit limit will be set to <strong>${salaryRange.creditLimit}</strong>
+                  Credit limit will be set to <strong>${Math.floor(salaryRange.value * 0.3)}</strong> (30% of salary)
                 </div>
               )}
             </>
@@ -942,7 +941,7 @@ function RegisterModal({ onClose, onSuccess }: RegisterModalProps) {
                 <SummaryRow label="Ministry"    value={ministry} />
                 <SummaryRow label="Department"  value={department} />
                 <SummaryRow label="Salary"      value={salaryRange ? salaryRange.label : ''} />
-                <SummaryRow label="Credit Limit" value={salaryRange ? `$${salaryRange.creditLimit}` : ''} />
+                <SummaryRow label="Credit Limit" value={salaryRange ? `$${Math.floor(salaryRange.value * 0.3)} (30% of salary)` : ''} />
               </div>
             </>
           )}
