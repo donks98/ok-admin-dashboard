@@ -1,8 +1,8 @@
 export type AdminRole = 'SUPER_ADMIN' | 'FINANCE' | 'HR' | 'VIEWER';
 
 export const ROLE_PAGES: Record<AdminRole, string[]> = {
-  SUPER_ADMIN: ['/', '/users', '/credit', '/direct-debit', '/stores', '/sandbox'],
-  FINANCE:     ['/', '/credit', '/direct-debit', '/stores'],
+  SUPER_ADMIN: ['/', '/users', '/credit', '/direct-debit', '/stores', '/reports', '/sandbox'],
+  FINANCE:     ['/', '/credit', '/direct-debit', '/stores', '/reports'],
   HR:          ['/', '/users'],
   VIEWER:      ['/'],
 };

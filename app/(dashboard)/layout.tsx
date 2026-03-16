@@ -11,6 +11,7 @@ const PAGE_NAMES: Record<string, string> = {
   '/credit':       'Credit & Debt',
   '/direct-debit': 'Direct Debits',
   '/stores':       'Store Revenue',
+  '/reports':      'Reports',
   '/sandbox':      'Sandbox',
 };
 

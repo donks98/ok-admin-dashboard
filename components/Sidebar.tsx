@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import {
   LayoutDashboard, Users, CreditCard, ArrowDownUp,
-  Store, FlaskConical, LogOut,
+  Store, FlaskConical, LogOut, FileBarChart,
 } from 'lucide-react';
 import { logout } from '@/lib/api';
 import { getRole, getAdminName, ROLE_META, type AdminRole, ROLE_PAGES } from '@/lib/auth';
@@ -16,6 +16,7 @@ const ALL_NAV = [
   { href: '/credit',       label: 'Credit & Debt', icon: CreditCard      },
   { href: '/direct-debit', label: 'Direct Debits', icon: ArrowDownUp     },
   { href: '/stores',       label: 'Store Revenue', icon: Store           },
+  { href: '/reports',      label: 'Reports',       icon: FileBarChart    },
   { href: '/sandbox',      label: 'Sandbox',       icon: FlaskConical    },
 ];
 
