@@ -41,6 +41,8 @@ function Badge({ text, color }: { text: string; color: string }) {
 
 const ACTION_COLORS: Record<string, string> = {
   LOGIN_SUCCESS: '#10B981', LOGIN_FAILED: '#EF4444', OTP_VERIFIED: '#6366F1',
+  ADMIN_LOGIN_SUCCESS: '#10B981', ADMIN_LOGIN_FAILED: '#EF4444',
+  ADMIN_REGISTERED_CIVIL_SERVANT: '#6366F1',
   PIN_CHANGED: '#F59E0B', PAYMENT_INITIATED: '#0EA5E9', SCHEDULE_CREATED: '#8B5CF6',
   DEDUCTION_SUCCESS: '#10B981', DEDUCTION_FAILED: '#EF4444',
 };
@@ -57,15 +59,16 @@ export default function PlatformPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    try {
-      const [rev, st, audit, err] = await Promise.all([
-        apiFetch('/api/platform/revenue'),
-        apiFetch('/api/platform/stats'),
-        apiFetch(`/api/platform/audit-logs?page=${auditPage}&limit=20`),
-        apiFetch(`/api/platform/error-logs?page=${errorPage}&limit=20`),
-      ]);
-      setRevenue(rev); setStats(st); setAudit(audit); setErrors(err);
-    } catch {}
+    const [rev, st, audit, err] = await Promise.all([
+      fetch('/api/platform/revenue').then(r => r.json()).catch(() => null),
+      fetch('/api/platform/stats').then(r => r.json()).catch(() => null),
+      fetch(`/api/platform/audit-logs?page=${auditPage}&limit=20`).then(r => r.json()).catch(() => null),
+      fetch(`/api/platform/error-logs?page=${errorPage}&limit=20`).then(r => r.json()).catch(() => null),
+    ]);
+    if (rev)   setRevenue(rev);
+    if (st)    setStats(st);
+    if (audit) setAudit(audit);
+    if (err)   setErrors(err);
     setLoading(false);
   }, [auditPage, errorPage]);
 
