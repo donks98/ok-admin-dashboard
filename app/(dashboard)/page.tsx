@@ -8,7 +8,7 @@ import {
 import {
   Users, CreditCard, TrendingUp,
   AlertTriangle, CheckCircle2,
-  Store, Activity, Banknote,
+  Store, Activity,
 } from 'lucide-react';
 import { api, OverviewData } from '@/lib/api';
 import { fmtUSD, fmtNum, fmtPct, fmtShortDate } from '@/lib/format';
@@ -102,16 +102,6 @@ export default function OverviewPage() {
         <StatCard title="Purchases This Month" value={fmtNum(data.thisMonthTransactions)}
           icon={Store}        iconBg="bg-green-50"  iconColor="text-green-600"
           sub="Transactions at OK stores" accent="#00843D" />
-      </div>
-
-      {/* KPI Row 3 — Platform Revenue */}
-      <div className="grid grid-cols-2 md:grid-cols-2 gap-4 mb-8 max-w-lg">
-        <StatCard title="Platform Revenue (All Time)" value={fmtUSD(data.totalPlatformRevenue, true)}
-          icon={Banknote} iconBg="bg-purple-50" iconColor="text-purple-600"
-          sub="1% fee on all purchases" accent="#8B5CF6" />
-        <StatCard title="Platform Revenue (This Month)" value={fmtUSD(data.thisMonthPlatformRevenue, true)}
-          icon={Banknote} iconBg="bg-purple-50" iconColor="text-purple-600"
-          sub={`from ${fmtNum(data.thisMonthTransactions)} transactions`} accent="#8B5CF6" />
       </div>
 
       {/* Charts — Registrations + Channel breakdown */}
